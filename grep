@@ -1,0 +1,61 @@
+#
+# add function in $profile
+#
+
+Function grep {
+    [CmdletBinding(PositionalBinding = $true)]
+    param (
+        [Parameter(Position = 0)]
+        [string]$Pattern,
+
+        [Parameter(Position = 1)]
+        [string]$Path = ".",  # Path par défaut
+
+        [string[]]$IncludeExtensions,
+
+        [switch]$CaseSensitive,
+
+        [Parameter(ValueFromPipeline = $true)]
+        [string[]]$InputObject
+    )
+
+    process {
+        # Si le pattern est vide, afficher un message d'utilisation
+        if (-not $Pattern -or $Pattern.Trim() -eq "") {
+            Write-Host "❌ Utilisation incorrecte : il faut au moins un pattern à rechercher." -ForegroundColor Red
+            Write-Host ""
+            Write-Host "✅ Exemple d'utilisation :" -ForegroundColor Green
+            Write-Host "   grep 'TODO'              # recherche récursive dans le dossier courant"
+            Write-Host "   grep 'ERROR' C:\logs     # recherche dans C:\logs"
+            Write-Host "   grep 'let' . -CaseSensitive -IncludeExtensions '.js', '.ts'"
+            Write-Host "   Get-Content file.txt | grep 'pattern'"
+            return
+        }
+
+        # Configuration de Select-String
+        $selectStringParams = @{ Pattern = $Pattern }
+        if ($CaseSensitive) { $selectStringParams.CaseSensitive = $true }
+
+        # Si le pipeline contient des objets, ne pas rechercher dans le répertoire
+        if ($PSCmdlet.MyInvocation.ExpectingInput) {
+# Write-Host "Recherche dans le pipeline..." -ForegroundColor Yellow
+            # On fait la recherche uniquement sur les objets du pipeline
+            $InputObject | Select-String @selectStringParams
+        }
+        else {
+# write-host "Recherche dans le répertoire $Path..." -ForegroundColor Yellow
+            # Sinon, on fait la recherche dans les fichiers du répertoire
+            $files = Get-ChildItem -Path $Path -Recurse -File
+            if ($IncludeExtensions) {
+                $files = $files | Where-Object { $IncludeExtensions -contains $_.Extension }
+            }
+
+            $results = $files | Select-String @selectStringParams
+
+            foreach ($match in $results) {
+                Write-Host "$($match.Path):$($match.LineNumber): " -ForegroundColor Cyan -NoNewline
+                Write-Host "$($match.Line.Trim())" -ForegroundColor Yellow
+            }
+        }
+    }
+}
